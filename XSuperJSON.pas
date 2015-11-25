@@ -327,6 +327,7 @@ type
 
   TJSONBuilder = class
   private
+    Refs: TDictionary<Variant, IJSONAncestor>;  
     LGen: TLexGenerator;
     FCheckDates: Boolean;
   public
@@ -1316,6 +1317,7 @@ end;
 
 constructor TJSONBuilder.Create(const JSON: String; const CheckDates: Boolean);
 begin
+  Refs := TDictionary<Variant, IJSONAncestor>.Create;
   LGen := TLexGenerator.Create(JSONLexGrammar);
   LGen.Load(JSON);
   FCheckDates := CheckDates;
@@ -1323,6 +1325,7 @@ end;
 
 destructor TJSONBuilder.Destroy;
 begin
+  Refs.Free;
   LGen.Free;
   inherited;
 end;
@@ -1371,6 +1374,7 @@ end;
 procedure TJSONBuilder.ReadObject(var Val: IJSONAncestor);
 var
   Name: String;
+  V: IJSONAncestor;
 begin
   LGen.KillLex;
   Val := TJSONObject.Create;
@@ -1380,7 +1384,13 @@ begin
        LGen.KillLex;
        if not LGen.CheckKill(ltColon) then
           raise TJSONSyntaxError.CreateFmt(Err_Expected, [':'], LGen.Current.Pos);
-       TJSONObject(Val).AddPair(TJSONPair.Create(Name, ReadValue));
+       V := ReadValue;
+       if Name = '$id' then
+         Refs.Add(V.AsVariant, Val)
+       else if Name = '$ref' then
+         Val := Refs[V.AsVariant]
+       else
+         TJSONObject(Val).AddPair(TJSONPair.Create(Name, V));
     end
   until not LGen.CheckKill(ltVirgule);
 
